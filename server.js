@@ -1,72 +1,74 @@
 import express from "express";
 import bodyParser from "body-parser";
-import cors from "cors";
-import dotenv from "dotenv";
 import admin from "firebase-admin";
 import fs from "fs";
+import dotenv from "dotenv";
 
-// ✅ Load environment variables
 dotenv.config();
-
 const app = express();
-app.use(cors());
+const PORT = process.env.PORT || 8080;
+
+// Middleware
 app.use(bodyParser.json());
 
-// ✅ Initialize Firebase Admin SDK
+// Load your Firebase service account key
+// Place your Firebase service account JSON key file in the project root
+// and rename it to serviceAccountKey.json
 const serviceAccount = JSON.parse(
   fs.readFileSync("./serviceAccountKey.json", "utf8")
 );
 
+// Initialize Firebase
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
-  databaseURL: "https://aqi1-a04ee-default-rtdb.asia-southeast1.firebasedatabase.app/",
 });
 
-const db = admin.database();
+const db = admin.firestore();
 
-// ✅ Root route
+// Root route
 app.get("/", (req, res) => {
-  res.send("✅ AQI Backend connected to Firebase!");
+  res.send("🌍 AQI Backend Running Successfully!");
 });
 
-// ✅ Receive ESP32 sensor data
+// Receive sensor data from ESP32
 app.post("/data", async (req, res) => {
   try {
     const { pm25, pm10, temperature, humidity, location } = req.body;
 
-    if (!pm25 || !pm10 || !temperature || !humidity || !location) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields",
-      });
+    if (
+      pm25 === undefined ||
+      pm10 === undefined ||
+      temperature === undefined ||
+      humidity === undefined ||
+      !location
+    ) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    console.log("📩 Data received:", req.body);
-
-    // ✅ Push data to Firebase
-    const ref = db.ref("sensorData").push();
-    await ref.set({
+    // Prepare the data to store
+    const timestamp = new Date().toISOString();
+    const data = {
       pm25,
       pm10,
       temperature,
       humidity,
       location,
-      timestamp: new Date().toISOString(),
-    });
+      timestamp,
+    };
 
-    res.status(200).json({
-      success: true,
-      message: "Data uploaded to Firebase successfully!",
-    });
+    // Store in Firebase Firestore
+    await db.collection("sensorData").add(data);
+
+    console.log("✅ Data stored:", data);
+
+    res.status(200).json({ message: "Data stored successfully!" });
   } catch (error) {
-    console.error("❌ Error uploading to Firebase:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error while uploading data",
-    });
+    console.error("❌ Error saving data:", error);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// ✅ Start the server
-const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Start the server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
