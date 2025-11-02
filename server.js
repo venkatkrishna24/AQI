@@ -2,43 +2,67 @@ import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import fs from "fs";
 
+// ✅ Load environment variables
 dotenv.config();
-const app = express();
 
+const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Root test route
-app.get("/", (req, res) => {
-  res.send("✅ AQI Backend is running successfully!");
+// ✅ Initialize Firebase Admin SDK
+const serviceAccount = JSON.parse(
+  fs.readFileSync("./serviceAccountKey.json", "utf8")
+);
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  databaseURL: "https://aqi1-a04ee-default-rtdb.asia-southeast1.firebasedatabase.app/",
 });
 
-// ✅ Route to receive ESP32 data
-app.post("/data", (req, res) => {
+const db = admin.database();
+
+// ✅ Root route
+app.get("/", (req, res) => {
+  res.send("✅ AQI Backend connected to Firebase!");
+});
+
+// ✅ Receive ESP32 sensor data
+app.post("/data", async (req, res) => {
   try {
     const { pm25, pm10, temperature, humidity, location } = req.body;
 
-    console.log("📩 Data received from ESP32:");
-    console.log({
+    if (!pm25 || !pm10 || !temperature || !humidity || !location) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields",
+      });
+    }
+
+    console.log("📩 Data received:", req.body);
+
+    // ✅ Push data to Firebase
+    const ref = db.ref("sensorData").push();
+    await ref.set({
       pm25,
       pm10,
       temperature,
       humidity,
       location,
+      timestamp: new Date().toISOString(),
     });
 
-    // Here you can add Firebase upload logic later if needed
-
-    res.status(200).send({
+    res.status(200).json({
       success: true,
-      message: "Data received successfully!",
+      message: "Data uploaded to Firebase successfully!",
     });
   } catch (error) {
-    console.error("❌ Error processing ESP32 data:", error);
-    res.status(500).send({
+    console.error("❌ Error uploading to Firebase:", error);
+    res.status(500).json({
       success: false,
-      message: "Server error",
+      message: "Server error while uploading data",
     });
   }
 });
