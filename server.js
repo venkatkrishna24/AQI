@@ -1,69 +1,48 @@
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import fetch from "node-fetch"; // to send data to Firebase
+import dotenv from "dotenv";
 
+dotenv.config();
 const app = express();
-const PORT = process.env.PORT || 8080;
-
-// Firebase Realtime Database URL (use your full database link)
-const FIREBASE_URL = "https://aqi1-a04ee-default-rtdb.asia-southeast1.firebasedatabase.app/data.json";
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// Test route
+// ✅ Root test route
 app.get("/", (req, res) => {
-  res.send("🌍 Firebase Backend Running!");
+  res.send("✅ AQI Backend is running successfully!");
 });
 
-// Receive data from ESP32
-app.post("/upload", async (req, res) => {
+// ✅ Route to receive ESP32 data
+app.post("/data", (req, res) => {
   try {
     const { pm25, pm10, temperature, humidity, location } = req.body;
 
-    // Validate all fields exist
-    if (
-      pm25 === undefined ||
-      pm10 === undefined ||
-      temperature === undefined ||
-      humidity === undefined ||
-      !location
-    ) {
-      return res.status(400).json({ error: "Missing or invalid data" });
-    }
-
-    // Prepare data for Firebase
-    const payload = {
+    console.log("📩 Data received from ESP32:");
+    console.log({
       pm25,
       pm10,
       temperature,
       humidity,
       location,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Send to Firebase Realtime Database
-    const response = await fetch(FIREBASE_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("🔥 Firebase Error:", err);
-      return res.status(500).send("Firebase upload failed");
-    }
+    // Here you can add Firebase upload logic later if needed
 
-    console.log("✅ Data uploaded to Firebase:", payload);
-    res.status(200).send("Data stored successfully");
-  } catch (err) {
-    console.error("❌ Server error:", err);
-    res.status(500).send("Server error");
+    res.status(200).send({
+      success: true,
+      message: "Data received successfully!",
+    });
+  } catch (error) {
+    console.error("❌ Error processing ESP32 data:", error);
+    res.status(500).send({
+      success: false,
+      message: "Server error",
+    });
   }
 });
 
-app.listen(PORT, () =>
-  console.log(`🚀 Server running on http://localhost:${PORT}`)
-);
+// ✅ Start the server
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
